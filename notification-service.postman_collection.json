@@ -1,0 +1,116 @@
+{
+  "info": {
+    "name": "Notification Service API",
+    "_postman_id": "e3c2b6cd-411c-47e4-b65e-abc123456789",
+    "description": "API endpoints for Notification System",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Send Notification",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"userId\": \"user1\",\n  \"title\": \"Hello!\",\n  \"content\": \"Welcome to our app.\",\n  \"priority\": \"NORMAL\",\n  \"category\": \"SYSTEM\",\n  \"channels\": [\"EMAIL\"]\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/v1/notifications",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["api", "v1", "notifications"]
+        }
+      }
+    },
+    {
+      "name": "Get User Notifications",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "http://localhost:8000/api/v1/notifications/user1",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["api", "v1", "notifications", "user1"]
+        }
+      }
+    },
+    {
+      "name": "Get Delivery Status",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "http://localhost:8000/api/v1/notifications/{{notificationId}}/status",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["api", "v1", "notifications", "{{notificationId}}", "status"]
+        }
+      }
+    },
+    {
+      "name": "Get User Preferences",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "http://localhost:8000/api/v1/preferences/user1",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["api", "v1", "preferences", "user1"]
+        }
+      }
+    },
+    {
+      "name": "Update User Preferences",
+      "request": {
+        "method": "PUT",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"emailEnabled\": true,\n  \"pushEnabled\": false,\n  \"smsEnabled\": true,\n  \"timezone\": \"Asia/Kolkata\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/v1/preferences/user1",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["api", "v1", "preferences", "user1"]
+        }
+      }
+    },
+    {
+      "name": "Add User Channel",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"channelType\": \"EMAIL\",\n  \"address\": \"user1@example.com\",\n  \"verified\": true,\n  \"active\": true\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/v1/preferences/user1/channels",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["api", "v1", "preferences", "user1", "channels"]
+        }
+      }
+    },
+    {
+      "name": "Get User Channels",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "http://localhost:8000/api/v1/preferences/user1/channels",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["api", "v1", "preferences", "user1", "channels"]
+        }
+      }
+    }
+  ]
+}

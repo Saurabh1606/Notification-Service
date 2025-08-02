@@ -1,0 +1,243 @@
+
+
+services:
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    hostname: zookeeper
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper-data:/var/lib/zookeeper/data
+      - zookeeper-logs:/var/lib/zookeeper/log
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    hostname: kafka
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "9101:9101"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_JMX_PORT: 9101
+      KAFKA_JMX_HOSTNAME: localhost
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_NUM_PARTITIONS: 6
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    depends_on:
+      - kafka
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --requirepass "redis123"
+    volumes:
+      - redis-data:/data
+
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: redis-commander
+    depends_on:
+      - redis
+    ports:
+      - "8081:8081"
+    environment:
+      - REDIS_HOSTS=local:redis:6379:0:redis123
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: notification_system
+      POSTGRES_USER: notif_user
+      POSTGRES_PASSWORD: notif_pass
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger
+    ports:
+      - "16686:16686"
+      - "14268:14268"
+    environment:
+      - COLLECTOR_ZIPKIN_HOST_PORT=:9411
+
+
+  notification-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    ports:
+      - "8000:8000"
+      - "5005:5005"
+    depends_on:
+      - kafka
+      - redis
+      - postgres
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=redis123
+      - DB_HOST=postgres
+      - DB_NAME=notification_system
+      - DB_USER=notif_user
+      - DB_PASSWORD=notif_pass
+      - JAEGER_ENDPOINT=http://jaeger:14268/api/traces
+    volumes:
+      - ./config/application-docker.yml:/app/application-docker.yml
+
+#  email-worker:
+#    build:
+#      context: ./email-worker
+#      dockerfile: Dockerfile
+#    container_name: email-worker
+#    depends_on:
+#      - kafka
+#      - redis
+#      - postgres
+#    environment:
+#      - SPRING_PROFILES_ACTIVE=docker
+#      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+#      - REDIS_HOST=redis
+#      - REDIS_PASSWORD=redis123
+#      - DB_HOST=postgres
+#      - DB_NAME=notification_system
+#      - DB_USER=notif_user
+#      - DB_PASSWORD=notif_pass
+#      - SENDGRID_API_KEY=${SENDGRID_API_KEY:-your-sendgrid-key}
+#      - MAILGUN_API_KEY=${MAILGUN_API_KEY:-your-mailgun-key}
+#    deploy:
+#      replicas: 2
+#
+#  push-worker:
+#    build:
+#      context: ./push-worker
+#      dockerfile: Dockerfile
+#    container_name: push-worker
+#    depends_on:
+#      - kafka
+#      - redis
+#      - postgres
+#    environment:
+#      - SPRING_PROFILES_ACTIVE=docker
+#      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+#      - REDIS_HOST=redis
+#      - REDIS_PASSWORD=redis123
+#      - DB_HOST=postgres
+#      - DB_NAME=notification_system
+#      - DB_USER=notif_user
+#      - DB_PASSWORD=notif_pass
+#      - FCM_SERVER_KEY=${FCM_SERVER_KEY:-your-fcm-key}
+#      - APNS_KEY_ID=${APNS_KEY_ID:-your-apns-key-id}
+#    deploy:
+#      replicas: 2
+#
+#  sms-worker:
+#    build:
+#      context: ./sms-worker
+#      dockerfile: Dockerfile
+#    container_name: sms-worker
+#    depends_on:
+#      - kafka
+#      - redis
+#      - postgres
+#    environment:
+#      - SPRING_PROFILES_ACTIVE=docker
+#      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+#      - REDIS_HOST=redis
+#      - REDIS_PASSWORD=redis123
+#      - DB_HOST=postgres
+#      - DB_NAME=notification_system
+#      - DB_USER=notif_user
+#      - DB_PASSWORD=notif_pass
+#      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID:-your-twilio-sid}
+#      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN:-your-twilio-token}
+
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: mailhog
+    ports:
+      - "1025:1025"  # SMTP server
+      - "8025:8025"  # Web UI
+
+
+  mock-sms:
+    image: nginx:alpine
+    container_name: mock-sms
+    ports:
+      - "8082:80"
+    volumes:
+      - ./testing/mock-sms.html:/usr/share/nginx/html/index.html
+
+volumes:
+  zookeeper-data:
+  zookeeper-logs:
+  kafka-data:
+  redis-data:
+  postgres-data:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  default:
+    name: notification-network

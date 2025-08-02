@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Notification Admin Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        input, button { margin: 5px; padding: 5px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+        th { background-color: #f4f4f4; }
+        .status-box { margin-top: 10px; }
+    </style>
+</head>
+<body>
+<h2>📡 Notification Admin Dashboard</h2>
+<label>User ID: </label>
+<input type="text" id="userId" value="user1" />
+<button onclick="connect()">Connect & Subscribe</button>
+<button onclick="sendTestNotification()">Send Test Notification</button>
+<button onclick="clearTable()">Clear Table</button>
+
+<div class="status-box">
+    <strong>Status Counts:</strong>
+    <div>✅ Success: <span id="count-success">0</span></div>
+    <div>⚠️ Failed: <span id="count-failed">0</span></div>
+    <div>📨 Pending: <span id="count-pending">0</span></div>
+</div>
+
+<table id="notificationTable">
+    <thead>
+    <tr>
+        <th>ID</th>
+        <th>Channel</th>
+        <th>Status</th>
+        <th>Time</th>
+        <th>Action</th>
+    </tr>
+    </thead>
+    <tbody></tbody>
+</table>
+
+<script>
+    let stompClient = null;
+    let counts = { SUCCESS: 0, FAILED: 0, PENDING: 0 };
+
+    function updateCounts(status) {
+      if (status === "SENT" || status === "DELIVERED") counts.SUCCESS++;
+      else if (status === "FAILED" || status === "BOUNCED") counts.FAILED++;
+      else counts.PENDING++;
+
+      document.getElementById("count-success").textContent = counts.SUCCESS;
+      document.getElementById("count-failed").textContent = counts.FAILED;
+      document.getElementById("count-pending").textContent = counts.PENDING;
+    }
+
+    function connect() {
+      const userId = document.getElementById("userId").value;
+      const socket = new SockJS("http://localhost:8000/ws-notify");
+      stompClient = Stomp.over(socket);
+
+      stompClient.connect({}, function () {
+        const topic = `/topic/notifications/${userId}`;
+        stompClient.subscribe(topic, function (message) {
+          const data = JSON.parse(message.body);
+          updateCounts(data.status);
+          addNotificationRow(data);
+        });
+      });
+    }
+
+    function sendTestNotification() {
+      const userId = document.getElementById("userId").value;
+      fetch("http://localhost:8000/api/v1/notifications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: userId,
+          title: "Admin Test",
+          content: "This is a test notification from admin UI.",
+          priority: "NORMAL",
+          category: "SYSTEM",
+          channels: ["EMAIL"]
+        })
+      });
+    }
+
+    function addNotificationRow(data) {
+      const tbody = document.getElementById("notificationTable").querySelector("tbody");
+      const row = document.createElement("tr");
+
+      const retryButton = document.createElement("button");
+      retryButton.textContent = "Retry";
+      retryButton.onclick = function () {
+        fetch(`http://localhost:8000/api/v1/retry/notification/${data.notificationId}`, {
+          method: "POST"
+        }).then(() => alert("Retry triggered for " + data.notificationId));
+      };
+
+      row.innerHTML = `
+        <td>${data.notificationId}</td>
+        <td>${data.channel}</td>
+        <td>${data.status}</td>
+        <td>${new Date(data.timestamp).toLocaleString()}</td>
+        <td></td>
+      `;
+
+      row.querySelector("td:last-child").appendChild(retryButton);
+      tbody.appendChild(row);
+    }
+
+    function clearTable() {
+      document.querySelector("#notificationTable tbody").innerHTML = "";
+      counts = { SUCCESS: 0, FAILED: 0, PENDING: 0 };
+      updateCounts();
+    }
+</script>
+</body>
+</html>
